@@ -74,6 +74,10 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
         return SPRING_CONTEXT;
     }
 
+    /**
+     * 检测 Spring 容器是否支持 ApplicationListener。若支持，则将 supportedApplicationListener 置为 true
+     * @param applicationContext
+     */
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) {
         this.applicationContext = applicationContext;
@@ -114,6 +118,13 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
         return service;
     }
 
+    /**
+     * Dubbo 服务导出过程始于 Spring 容器发布刷新事件，Dubbo 在接收到事件后，会立即执行服务导出逻辑。
+     * 整个逻辑大致可分为三个部分，第一部分是前置工作，主要用于检查参数，组装 URL。
+     * 第二部分是导出服务，包含导出服务到本地 (JVM)，和导出服务到远程两个过程。
+     * 第三部分是向注册中心注册服务，用于服务发现
+     * @param event
+     */
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
         if (isDelay() && !isExported() && !isUnexported()) {
@@ -124,6 +135,10 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
         }
     }
 
+    /**
+     * 是否延迟导出服务
+     * @return 方法返回 true 时，表示无需延迟导出。返回 false 时，表示需要延迟导出
+     */
     private boolean isDelay() {
         Integer delay = getDelay();
         ProviderConfig provider = getProvider();
@@ -141,7 +156,8 @@ public class ServiceBean<T> extends ServiceConfig<T> implements InitializingBean
             if (providerConfigMap != null && providerConfigMap.size() > 0) {
                 Map<String, ProtocolConfig> protocolConfigMap = applicationContext == null ? null : BeanFactoryUtils.beansOfTypeIncludingAncestors(applicationContext, ProtocolConfig.class, false, false);
                 if ((protocolConfigMap == null || protocolConfigMap.size() == 0)
-                        && providerConfigMap.size() > 1) { // backward compatibility
+                        && providerConfigMap.size() > 1) {
+                    // 兼容旧版本
                     List<ProviderConfig> providerConfigs = new ArrayList<ProviderConfig>();
                     for (ProviderConfig config : providerConfigMap.values()) {
                         if (config.isDefault() != null && config.isDefault().booleanValue()) {

@@ -194,6 +194,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
 
     public synchronized void export() {
         if (provider != null) {
+            // 获取 export 和 delay 配置
             if (export == null) {
                 export = provider.getExport();
             }
@@ -201,11 +202,12 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 delay = provider.getDelay();
             }
         }
+        // 如果 export 为 false，则不导出服务
         if (export != null && !export) {
             return;
         }
-
         if (delay != null && delay > 0) {
+            // delay > 0，延时导出服务
             delayExportExecutor.schedule(new Runnable() {
                 @Override
                 public void run() {
@@ -213,6 +215,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
                 }
             }, delay, TimeUnit.MILLISECONDS);
         } else {
+            // 立即导出服务
             doExport();
         }
     }
@@ -225,9 +228,11 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             return;
         }
         exported = true;
+        // 检测 interfaceName 是否合法
         if (interfaceName == null || interfaceName.length() == 0) {
             throw new IllegalStateException("<dubbo:service interface=\"\" /> interface not allow null!");
         }
+        // 检测 provider 是否为空，为空则新建一个，并通过系统变量为其初始化
         checkDefault();
         if (provider != null) {
             if (application == null) {

@@ -37,7 +37,7 @@ import java.util.regex.Pattern;
 
 /**
  * Utility methods and public methods for parsing configuration
- *
+ * 配置解析的工具方法、公共方法
  * @export
  */
 public abstract class AbstractConfig implements Serializable {
@@ -257,8 +257,9 @@ public abstract class AbstractConfig implements Serializable {
                         && method.getParameterTypes().length == 0
                         && isPrimitive(method.getReturnType())) {
                     Parameter parameter = method.getAnnotation(Parameter.class);
-                    if (parameter == null || !parameter.attribute())
+                    if (parameter == null || !parameter.attribute()){
                         continue;
+                    }
                     String key;
                     parameter.key();
                     if (parameter.key().length() > 0) {

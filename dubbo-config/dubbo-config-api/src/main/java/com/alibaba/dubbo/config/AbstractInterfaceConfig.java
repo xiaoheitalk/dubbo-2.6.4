@@ -53,59 +53,62 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     private static final long serialVersionUID = -1559314110797223229L;
 
     // local impl class name for the service interface
+    // 服务接口的本地实现类名
     protected String local;
 
     // local stub class name for the service interface
+    // 服务接口的本地实现类名
     protected String stub;
 
     // service monitor
+    // 服务监控
     protected MonitorConfig monitor;
 
-    // proxy type
+    // 代理类型
     protected String proxy;
 
-    // cluster type
+    // 集群方式
     protected String cluster;
 
-    // filter
+    // 过滤器
     protected String filter;
 
-    // listener
+    // 监听器
     protected String listener;
 
-    // owner
+    // 负责人
     protected String owner;
 
     // connection limits, 0 means shared connection, otherwise it defines the connections delegated to the
-    // current service
+    // 连接数限制,0表示共享连接，否则为该服务独享连接数
     protected Integer connections;
 
-    // layer
+    // 连接数限制
     protected String layer;
 
-    // application info
+    // 应用信息
     protected ApplicationConfig application;
 
-    // module info
+    // 模块信息
     protected ModuleConfig module;
 
-    // registry centers
+    // 注册中心
     protected List<RegistryConfig> registries;
 
-    // connection events
+    // 连接事件
     protected String onconnect;
 
-    // disconnection events
+    // 断开事件
     protected String ondisconnect;
 
-    // callback limits
+    // callback实例个数限制
     private Integer callbacks;
 
-    // the scope for referring/exporting a service, if it's local, it means searching in current JVM only.
+    // 服务暴露或引用的scope,如果为local，则表示只在当前JVM内查找.
     private String scope;
 
     protected void checkRegistry() {
-        // for backward compatibility
+        // 兼容旧版本
         if (registries == null || registries.isEmpty()) {
             String address = ConfigUtils.getProperty("dubbo.registry.address");
             if (address != null && address.length() > 0) {
@@ -258,15 +261,15 @@ public abstract class AbstractInterfaceConfig extends AbstractMethodConfig {
     }
 
     protected void checkInterfaceAndMethods(Class<?> interfaceClass, List<MethodConfig> methods) {
-        // interface cannot be null
+        // 接口不能为空
         if (interfaceClass == null) {
             throw new IllegalStateException("interface not allow null!");
         }
-        // to verify interfaceClass is an interface
+        // 检查接口类型必需为接口
         if (!interfaceClass.isInterface()) {
             throw new IllegalStateException("The interface class " + interfaceClass + " is not a interface!");
         }
-        // check if methods exist in the interface
+        // 检查方法是否在接口中存在
         if (methods != null && !methods.isEmpty()) {
             for (MethodConfig methodBean : methods) {
                 String methodName = methodBean.getName();

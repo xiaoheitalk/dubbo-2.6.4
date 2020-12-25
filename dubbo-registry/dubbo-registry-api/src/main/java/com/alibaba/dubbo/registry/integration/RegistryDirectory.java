@@ -57,8 +57,8 @@ import java.util.Set;
  * RegistryDirectory
  * 动态服务目录，当注册中心服务配置发生变化后，RegistryDirectory 可收到与当前服务相关的变化
  * 收到变更通知后，RegistryDirectory 可根据配置变更信息刷新 Invoker 列表。RegistryDirectory 中有几个比较重要的逻辑
- * 第一是 Invoker 的列举逻辑
- * 第二是接收服务配置变更的逻辑，
+ * 第一是 Invoker 的列举逻辑 : doList 方法可以看做是对 methodInvokerMap 变量的读操作
+ * 第二是 接收服务配置变更的逻辑 : notify 方法是对 methodInvokerMap 变量的写操作
  * 第三是 Invoker 列表的刷新逻辑
  */
 public class RegistryDirectory<T> extends AbstractDirectory<T> implements NotifyListener {
@@ -70,16 +70,22 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
     private static final RouterFactory routerFactory = ExtensionLoader.getExtensionLoader(RouterFactory.class).getAdaptiveExtension();
 
     private static final ConfiguratorFactory configuratorFactory = ExtensionLoader.getExtensionLoader(ConfiguratorFactory.class).getAdaptiveExtension();
+    // 构造时初始化，断言不为null
     private final String serviceKey; // Initialization at construction time, assertion not null
+    // 构造时初始化，断言不为null
     private final Class<T> serviceType; // Initialization at construction time, assertion not null
+    // 构造时初始化，断言不为null
     private final Map<String, String> queryMap; // Initialization at construction time, assertion not null
+    // 构造时初始化，断言不为null，并且总是赋非null值
     private final URL directoryUrl; // Initialization at construction time, assertion not null, and always assign non null value
     private final String[] serviceMethods;
     private final boolean multiGroup;
+    // 注入时初始化，断言不为null
     private Protocol protocol; // Initialization at the time of injection, the assertion is not null
+    // 注入时初始化，断言不为null
     private Registry registry; // Initialization at the time of injection, the assertion is not null
     private volatile boolean forbidden = false;
-
+    // 构造时初始化，断言不为null，并且总是赋非null值
     private volatile URL overrideDirectoryUrl; // Initialization at construction time, assertion not null, and always assign non null value
 
     /**
@@ -88,15 +94,24 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
      * Rule one: for a certain provider <ip:port,timeout=100>
      * Rule two: for all providers <* ,timeout=5000>
      */
+    /*override规则
+     * 优先级：override>-D>consumer>provider
+     * 第一种规则：针对某个provider <ip:port,timeout=100>
+     * 第二种规则：针对所有provider <* ,timeout=5000>
+     */
+    // 初始为null以及中途可能被赋为null，请使用局部变量引用
     private volatile List<Configurator> configurators; // The initial value is null and the midway may be assigned to null, please use the local variable reference
 
     // Map<url, Invoker> cache service url to invoker mapping.
+    // 初始为null以及中途可能被赋为null，请使用局部变量引用
     private volatile Map<String, Invoker<T>> urlInvokerMap; // The initial value is null and the midway may be assigned to null, please use the local variable reference
 
     // Map<methodName, Invoker> cache service method to invokers mapping.
+    // 初始为null以及中途可能被赋为null，请使用局部变量引用
     private volatile Map<String, List<Invoker<T>>> methodInvokerMap; // The initial value is null and the midway may be assigned to null, please use the local variable reference
 
     // Set<invokerUrls> cache invokeUrls to invokers mapping.
+    // 初始为null以及中途可能被赋为null，请使用局部变量引用
     private volatile Set<URL> cachedInvokerUrls; // The initial value is null and the midway may be assigned to null, please use the local variable reference
 
     public RegistryDirectory(Class<T> serviceType, URL url) {
@@ -124,6 +139,17 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
      *             </br>2.override://ip:port...?anyhost=false Special rules (only for a certain provider)
      *             </br>3.override:// rule is not supported... ,needs to be calculated by registry itself.
      *             </br>4.override://0.0.0.0/ without parameters means clearing the override
+     * @return
+     */
+    /**
+     * 将overrideURL转换为map，供重新refer时使用.
+     * 每次下发全部规则，全部重新组装计算
+     *
+     * @param urls 契约：
+     *             </br>1.override://0.0.0.0/...(或override://ip:port...?anyhost=true)&para1=value1...表示全局规则(对所有的提供者全部生效)
+     *             </br>2.override://ip:port...?anyhost=false 特例规则（只针对某个提供者生效）
+     *             </br>3.不支持override://规则... 需要注册中心自行计算.
+     *             </br>4.不带参数的override://0.0.0.0/ 表示清除override
      * @return
      */
     public static List<Configurator> toConfigurators(List<URL> urls) {
@@ -184,6 +210,13 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
     }
 
+    /**
+     * 对 methodInvokerMap 变量的写操作
+     * 1、首先是根据 url 的 category 参数对 url 进行分门别类存储
+     * 2、然后通过 toRouters 和 toConfigurators 将 url 列表转成 Router 和 Configurator 列表
+     * 3、最后调用 refreshInvoker 方法刷新 Invoker 列表
+     * @param urls The list of registered information , is always not empty. The meaning is the same as the return value of {@link com.alibaba.dubbo.registry.RegistryService#lookup(URL)}.
+     */
     @Override
     public synchronized void notify(List<URL> urls) {
         // 定义三个集合，分别用于存放服务提供者 url，路由 url，配置器 url
@@ -192,24 +225,30 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         List<URL> configuratorUrls = new ArrayList<URL>();
         for (URL url : urls) {
             String protocol = url.getProtocol();
+            // 获取 category 参数
             String category = url.getParameter(Constants.CATEGORY_KEY, Constants.DEFAULT_CATEGORY);
+            // 根据 category 参数将 url 分别放到不同的列表中
             if (Constants.ROUTERS_CATEGORY.equals(category)
                     || Constants.ROUTE_PROTOCOL.equals(protocol)) {
+                // 添加路由器 url
                 routerUrls.add(url);
             } else if (Constants.CONFIGURATORS_CATEGORY.equals(category)
                     || Constants.OVERRIDE_PROTOCOL.equals(protocol)) {
+                // 添加配置器 url
                 configuratorUrls.add(url);
             } else if (Constants.PROVIDERS_CATEGORY.equals(category)) {
+                // 添加服务提供者 url
                 invokerUrls.add(url);
             } else {
+                // 忽略不支持的 category
                 logger.warn("Unsupported category " + category + " in notified url: " + url + " from registry " + getUrl().getAddress() + " to consumer " + NetUtils.getLocalHost());
             }
         }
-        // configurators
+        // 将 url 转成 Configurator
         if (configuratorUrls != null && !configuratorUrls.isEmpty()) {
             this.configurators = toConfigurators(configuratorUrls);
         }
-        // routers
+        // 将 url 转成 Router
         if (routerUrls != null && !routerUrls.isEmpty()) {
             List<Router> routers = toRouters(routerUrls);
             if (routers != null) { // null - do nothing
@@ -221,13 +260,22 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         this.overrideDirectoryUrl = directoryUrl;
         if (localConfigurators != null && !localConfigurators.isEmpty()) {
             for (Configurator configurator : localConfigurators) {
+                // 配置 overrideDirectoryUrl
                 this.overrideDirectoryUrl = configurator.configure(overrideDirectoryUrl);
             }
         }
-        // providers
+        // 刷新 Invoker 列表
         refreshInvoker(invokerUrls);
     }
 
+    /**
+     * 根据invokerURL列表转换为invoker列表。转换规则如下：
+     * 1.如果url已经被转换为invoker，则不在重新引用，直接从缓存中获取，注意如果url中任何一个参数变更也会重新引用
+     * 2.如果传入的invoker列表不为空，则表示最新的invoker列表
+     * 3.如果传入的invokerUrl列表是空，则表示只是下发的override规则或route规则，需要重新交叉对比，决定是否需要重新引用。
+     *
+     * @param invokerUrls 传入的参数不能为null
+     */
     /**
      * Convert the invokerURL list to the Invoker Map. The rules of the conversion are as follows:
      * 1.If URL has been converted to invoker, it is no longer re-referenced and obtained directly from the cache, and notice that any parameter changes in the URL will be re-referenced.
@@ -237,6 +285,7 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
      * @param invokerUrls this parameter can't be null
      */
     // TODO: 2017/8/31 FIXME The thread pool should be used to refresh the address, otherwise the task may be accumulated.
+    // 使用线程池去刷新地址，否则可能会导致任务堆积
     private void refreshInvoker(List<URL> invokerUrls) {
         if (invokerUrls != null && invokerUrls.size() == 1 && invokerUrls.get(0) != null
                 && Constants.EMPTY_PROTOCOL.equals(invokerUrls.get(0).getProtocol())) {
@@ -573,6 +622,11 @@ public class RegistryDirectory<T> extends AbstractDirectory<T> implements Notify
         }
     }
 
+    /**
+     * doList 方法可以看做是对 methodInvokerMap 变量的读操作
+     * @param invocation
+     * @return
+     */
     @Override
     public List<Invoker<T>> doList(Invocation invocation) {
         if (forbidden) {
